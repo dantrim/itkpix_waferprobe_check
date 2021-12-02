@@ -1,9 +1,5 @@
 #!/usr/bin/env python
 
-"""
-Read wafer probing data and dump CSV files containing
-k-factor information for each chip
-"""
 
 import typer
 
@@ -13,12 +9,14 @@ import hdf5plugin
 import h5py
 
 import numpy as np
-#import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
-#from scipy import optimize
 from typing import List, Dict, Tuple
 
 from pathlib import Path
+
+import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use("agg") # don't run interactive/gui
 
 
 def gather_and_clean_data(input_file : Path) -> Dict[str, pd.DataFrame]:
@@ -164,34 +162,80 @@ def compute_k_factors_from_fit(data: Dict[str, pd.DataFrame], chip_sn_list: List
     
     return k
 
+def dump_hist(data_bonn: pd.Series, data_int: pd.Series, title: str, savename: str) -> None:
+
+    bins = np.arange(900, 1180, 10)
+
+    fig, ax = plt.subplots(1,1)
+    ax.set_title(title)
+    ax.set_xlabel("k-factor")
+    ax.grid(True)
+    ax.tick_params(direction = "in", which = "both", top = True, right = True, bottom = True, left = True)
+
+    ax.hist(data_bonn, bins = bins, alpha = 0.5, label = "Bonn")
+    ax.hist(data_int, bins = bins, alpha = 0.5, label = "Internal")
+
+    ax.legend(loc = "best")
+
+    fig.savefig(savename, bbox_inches = "tight")
 
 def main(
-        input_file: str = typer.Argument(..., help = "Input wafer probing HDF5 file")
+        input_file: str = typer.Argument(..., help = "Input wafer probing HDF5 file"),
         ):
+    """
+    Read wafer probing data and dump CSV files containing
+    k-factor information for each chip
+    """
 
     input_file = Path(input_file)
     if not input_file.exists() or not input_file.is_file() :
         print(f"ERROR: Could not find provided input \"{input_file}\"")
         sys.exit(1)
 
+    wafer_num = str(input_file).split("/")[-1].split("_")[-1].replace(".h5", "")
+
     data, chip_sn_list = gather_and_clean_data(input_file)
+
+    ##
+    ## get k-factor data
+    ##
 
     # get the k-factors as computed by BDAQ/Bonn (using VIN_D, VIN_A)
     k_bonn = compute_k_factors(data, chip_sn_list)
-    k_bonn.to_csv("k_factors_bonn.csv")
+    k_bonn.to_csv(f"k_factors_bonn_{wafer_num}.csv", columns = ["chip_sn", "k_dig", "k_ana"])
 
     # get the k-factors as computed by BDAQ/Bonn BUT using internal VIN measurements (VIN_D_int, VIN_A_int)
     k_int = compute_k_factors(data, chip_sn_list, use_internal = True)
-    k_int.to_csv("k_factors_int.csv")
+    k_int.to_csv(f"k_factors_int_{wafer_num}.csv", columns = ["chip_sn", "k_dig", "k_ana"])
 
     # get the k-factors from performing linear fit (using VIN_D, VIN_A)
     k_bonn_fit = compute_k_factors_from_fit(data, chip_sn_list)
-    k_bonn_fit.to_csv("k_factors_bonn_fit.csv")
+    k_bonn_fit.to_csv(f"k_factors_bonn_fit_{wafer_num}.csv", columns = ["chip_sn", "k_dig", "k_ana"])
 
 
     # get the k-factors from performing linear fit BUT using internal VIN measurementts (VIN_D_int, VIN_A_int)
     k_int_fit = compute_k_factors_from_fit(data, chip_sn_list, use_internal = True)
-    k_int_fit.to_csv("k_factors_int_fit.csv")
+    k_int_fit.to_csv(f"k_factors_int_fit_{wafer_num}.csv", columns = ["chip_sn", "k_dig", "k_ana"])
+
+
+    ##
+    ## make plots
+    ##
+    title = "Digital k-factor (single-point method)"
+    title = f"{title}, Wafer {wafer_num}"
+    dump_hist(k_bonn["k_dig"], k_int["k_dig"], title, "k_factor_digital.pdf")
+
+    title = "Analog k-factor (single-point method)"
+    title = f"{title}, Wafer {wafer_num}"
+    dump_hist(k_bonn["k_ana"], k_int["k_ana"], title, "k_factor_analog.pdf")
+
+    title = "Digital k-factor (linear fit)"
+    title = f"{title}, Wafer {wafer_num}"
+    dump_hist(k_bonn_fit["k_dig"], k_int_fit["k_dig"], title, "k_factor_digital_fit.pdf")
+
+    title = "Analog k-factor (linear fit)"
+    title = f"{title}, Wafer {wafer_num}"
+    dump_hist(k_bonn_fit["k_ana"], k_int_fit["k_ana"], title, "k_factor_analog_fit.pdf")
 
 if __name__ == "__main__" :
     typer.run(main)

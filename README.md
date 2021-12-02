@@ -25,3 +25,8 @@ Usage: dump-k-factors.py [OPTIONS] INPUT_FILE
 Arguments:
   INPUT_FILE  Input wafer probing HDF5 file  [required]
 ```
+
+## Wafer Probing Data
+
+The wafer probing data is located [here](?path=%2Fnew_iref_routine%2F0x14A).
+You can find the password for accessing the CERNbox link on the [Rd53bTesting Twiki](https://twiki.cern.ch/twiki/bin/viewauth/RD53/RD53BTesting#Wafer_probing).

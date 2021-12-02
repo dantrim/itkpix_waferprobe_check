@@ -28,5 +28,5 @@ Arguments:
 
 ## Wafer Probing Data
 
-The wafer probing data is located [here](?path=%2Fnew_iref_routine%2F0x14A).
+The wafer probing data is located [here](https://cernbox.cern.ch/index.php/s/c6p5Xrqv4NkfXXj).
 You can find the password for accessing the CERNbox link on the [Rd53bTesting Twiki](https://twiki.cern.ch/twiki/bin/viewauth/RD53/RD53BTesting#Wafer_probing).

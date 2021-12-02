@@ -223,19 +223,19 @@ def main(
     ##
     title = "Digital k-factor (single-point method)"
     title = f"{title}, Wafer {wafer_num}"
-    dump_hist(k_bonn["k_dig"], k_int["k_dig"], title, "k_factor_digital.pdf")
+    dump_hist(k_bonn["k_dig"], k_int["k_dig"], title, f"k_factor_digital_{wafer_num}.pdf")
 
     title = "Analog k-factor (single-point method)"
     title = f"{title}, Wafer {wafer_num}"
-    dump_hist(k_bonn["k_ana"], k_int["k_ana"], title, "k_factor_analog.pdf")
+    dump_hist(k_bonn["k_ana"], k_int["k_ana"], title, f"k_factor_analog_{wafer_num}.pdf")
 
     title = "Digital k-factor (linear fit)"
     title = f"{title}, Wafer {wafer_num}"
-    dump_hist(k_bonn_fit["k_dig"], k_int_fit["k_dig"], title, "k_factor_digital_fit.pdf")
+    dump_hist(k_bonn_fit["k_dig"], k_int_fit["k_dig"], title, f"k_factor_digital_fit_{wafer_num}.pdf")
 
     title = "Analog k-factor (linear fit)"
     title = f"{title}, Wafer {wafer_num}"
-    dump_hist(k_bonn_fit["k_ana"], k_int_fit["k_ana"], title, "k_factor_analog_fit.pdf")
+    dump_hist(k_bonn_fit["k_ana"], k_int_fit["k_ana"], title, f"k_factor_analog_fit_{wafer_num}.pdf")
 
 if __name__ == "__main__" :
     typer.run(main)

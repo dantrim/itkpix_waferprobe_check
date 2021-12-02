@@ -1,0 +1,8 @@
+pandas
+hdf5plugin
+tables
+h5py
+numpy
+matplotlib
+scipy
+typer

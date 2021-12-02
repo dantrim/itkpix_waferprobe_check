@@ -192,8 +192,10 @@ def main(
         print(f"ERROR: Could not find provided input \"{input_file}\"")
         sys.exit(1)
 
+    # filename has the expected format of "wafer_summary_0xWWW.h5"
     wafer_num = str(input_file).split("/")[-1].split("_")[-1].replace(".h5", "")
 
+    # get the data to dump and plot
     data, chip_sn_list = gather_and_clean_data(input_file)
 
     ##

@@ -7,6 +7,7 @@ import pandas as pd
 from pandas import HDFStore
 import hdf5plugin
 import h5py
+import sys
 
 import numpy as np
 from scipy.optimize import curve_fit
@@ -19,7 +20,7 @@ import matplotlib
 matplotlib.use("agg") # don't run interactive/gui
 
 
-def gather_and_clean_data(input_file : Path) -> Dict[str, pd.DataFrame]:
+def gather_and_clean_data(input_file : Path) -> pd.DataFrame:
     """Get the data that we want and clean it up a bit"""
 
     vin_a_tti_cur = pd.read_hdf(input_file, "shunt_curves/VIN_A_tti_cur")
@@ -39,6 +40,8 @@ def gather_and_clean_data(input_file : Path) -> Dict[str, pd.DataFrame]:
         "vin_a": vin_a,
         "vin_d": vin_d,
         "vofs": vofs,
+        "gnd_a": gnd_a,
+        "gnd_d": gnd_d
     }
 
     # properly decode the chip_sn column data as string from bytes
@@ -58,9 +61,13 @@ def gather_and_clean_data(input_file : Path) -> Dict[str, pd.DataFrame]:
     for k, v in data.items() :
         data[k] = drop_columns(v)
 
-    return data, chip_sn_list
+    # create one big dataframe with multindex
+    data = pd.concat(data, axis = 1)
+    data["chip_sn"] = chip_sn_list
+    return data
 
-def compute_k_factors(data: Dict[str, pd.DataFrame], chip_sn_list : List[str], use_internal : bool = False) -> pd.DataFrame:
+def compute_k_factors(data: Dict[str, pd.DataFrame],
+        use_internal : bool = False, ground_shift: bool = False) -> pd.DataFrame:
     """Compute k-factors from a single point"""
     
     # get the relevant data
@@ -71,6 +78,10 @@ def compute_k_factors(data: Dict[str, pd.DataFrame], chip_sn_list : List[str], u
     vin_a = data["vin_a"]
     vin_d = data["vin_d"]
     vofs = data["vofs"]
+    gnd_d = data["gnd_d"]
+    gnd_a = data["gnd_a"]
+
+    chip_sn_list = list(data["chip_sn"])
         
     # constants
     rext = 600 # ohm
@@ -79,18 +90,21 @@ def compute_k_factors(data: Dict[str, pd.DataFrame], chip_sn_list : List[str], u
     # for internal (VMUX) measurements, VIN is 1/4
     vin_d_select = vin_d_int*4 if use_internal else vin_d
     vin_a_select = vin_a_int*4 if use_internal else vin_a
+
+    gnd_d_offset = gnd_d if ground_shift else 0
+    gnd_a_offset = gnd_a if ground_shift else 0
         
     # compute digital k-factor
     idx_sel_digital = abs(vin_d_select - 1.6) < shunt_interval
     dig_numerator = rext * vin_d_tti_cur[idx_sel_digital]
-    dig_denominator = vin_d_select[idx_sel_digital] - vofs[idx_sel_digital]*2
+    dig_denominator = vin_d_select[idx_sel_digital] - (vofs[idx_sel_digital]-gnd_d_offset)*2
     k_dig = dig_numerator / dig_denominator
     k_dig["k_dig"] = k_dig.mean(axis = 1) # compute the row average
     
     # compute analog k-factor
     idx_sel_analog = abs(vin_a_select - 1.6) < shunt_interval
     ana_numerator = rext * vin_a_tti_cur[idx_sel_analog]
-    ana_denominator = vin_a_select[idx_sel_analog] - vofs[idx_sel_analog]*2
+    ana_denominator = vin_a_select[idx_sel_analog] - (vofs[idx_sel_analog]-gnd_a_offset)*2
     k_ana = ana_numerator / ana_denominator
     k_ana["k_ana"] = k_ana.mean(axis = 1) # compute the row average
     
@@ -107,7 +121,8 @@ def compute_k_factors(data: Dict[str, pd.DataFrame], chip_sn_list : List[str], u
     
     return k
 
-def compute_k_factors_from_fit(data: Dict[str, pd.DataFrame], chip_sn_list: List[str], use_internal: bool = False) -> pd.DataFrame:
+def compute_k_factors_from_fit(data: Dict[str, pd.DataFrame],
+        use_internal: bool = False) -> pd.DataFrame:
     """Compute k-factors from a linear fit of the VI curves"""
     
     # linear fit function
@@ -125,6 +140,10 @@ def compute_k_factors_from_fit(data: Dict[str, pd.DataFrame], chip_sn_list: List
     vin_a = data["vin_a"]
     vin_d = data["vin_d"]
     vofs = data["vofs"]
+    gnd_a = data["gnd_a"]
+    gnd_d = data["gnd_d"]
+
+    chip_sn_list = list(data["chip_sn"])
     
     # constants
     rext = 600 # ohm
@@ -132,6 +151,7 @@ def compute_k_factors_from_fit(data: Dict[str, pd.DataFrame], chip_sn_list: List
     # for internal (VMUX) measurements, VIN is 1/4
     vin_d_select = vin_d_int*4 if use_internal else vin_d
     vin_a_select = vin_a_int*4 if use_internal else vin_a
+
         
     # compute k-factors from linear fit
     k_anas = []
@@ -196,27 +216,27 @@ def main(
     wafer_num = str(input_file).split("/")[-1].split("_")[-1].replace(".h5", "")
 
     # get the data to dump and plot
-    data, chip_sn_list = gather_and_clean_data(input_file)
+    data = gather_and_clean_data(input_file)
 
     ##
     ## get k-factor data
     ##
 
     # get the k-factors as computed by BDAQ/Bonn (using VIN_D, VIN_A)
-    k_bonn = compute_k_factors(data, chip_sn_list)
+    k_bonn = compute_k_factors(data, ground_shift = True)
     k_bonn.to_csv(f"k_factors_bonn_{wafer_num}.csv", columns = ["chip_sn", "k_dig", "k_ana"])
 
     # get the k-factors as computed by BDAQ/Bonn BUT using internal VIN measurements (VIN_D_int, VIN_A_int)
-    k_int = compute_k_factors(data, chip_sn_list, use_internal = True)
+    k_int = compute_k_factors(data, use_internal = True, ground_shift = True)
     k_int.to_csv(f"k_factors_int_{wafer_num}.csv", columns = ["chip_sn", "k_dig", "k_ana"])
 
     # get the k-factors from performing linear fit (using VIN_D, VIN_A)
-    k_bonn_fit = compute_k_factors_from_fit(data, chip_sn_list)
+    k_bonn_fit = compute_k_factors_from_fit(data)
     k_bonn_fit.to_csv(f"k_factors_bonn_fit_{wafer_num}.csv", columns = ["chip_sn", "k_dig", "k_ana"])
 
 
     # get the k-factors from performing linear fit BUT using internal VIN measurementts (VIN_D_int, VIN_A_int)
-    k_int_fit = compute_k_factors_from_fit(data, chip_sn_list, use_internal = True)
+    k_int_fit = compute_k_factors_from_fit(data, use_internal = True)
     k_int_fit.to_csv(f"k_factors_int_fit_{wafer_num}.csv", columns = ["chip_sn", "k_dig", "k_ana"])
 
 
